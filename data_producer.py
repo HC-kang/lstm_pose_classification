@@ -32,10 +32,12 @@ def draw_landmark_on_image(mpDraw, results, img):
 
 
 def produce_pose_data(label, num_of_frames = 10):
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture('./data/chest_trapping.mp4')
     lmk_list = []
     while len(lmk_list) <= num_of_frames:
         ret, frame = cap.read()
+        if frame is None:
+            break
         if ret:
 
             frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -60,9 +62,7 @@ def produce_pose_data(label, num_of_frames = 10):
     return
 
 # labels = ['stop', 'l_h_swing', 'r_h_swing', 'l_f_swing', 'r_f_swing']
-# labels = ['stop', 'l_h_swing']
-# labels = ['r_h_swing']
-labels = ['l_f_swing', 'r_f_swing']
+labels = ['chest_trapping']
 import time
 for label in labels:
     time.sleep(3)

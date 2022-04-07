@@ -48,3 +48,16 @@ Y
 
 X, y = np.array(X), np.array(Y)
 
+import pandas as pd
+a = [[1,2,3],[1,2,3]]
+a = pd.DataFrame(a)
+b = [[1,2,3],[1,2,3]]
+b = pd.DataFrame(a)
+c = [[1,2,3],[1,2,3]]
+c = pd.DataFrame(a)
+
+a.head(1)
+
+lists = [a, b, c]
+
+print(*lists)

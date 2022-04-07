@@ -13,6 +13,16 @@ Y = []
 data_name = ['stop.txt', 'l_h_swing.txt', 'r_h_swing.txt', 'l_f_swing.txt', 'r_f_swing.txt']
 num_of_timestep = 10 
 
+def save_model(model):
+    model_number = 1
+    while True:
+        if not os.path.isfile(f'./models/simple_lstm_model_{model_number:0>3d}.h5'):
+            model.save(f'./models/simple_lstm_model_{model_number:0>3d}.h5')
+            break
+        else:
+            model_number += 1
+
+
 for idx in range(len(data_name)):
     data = pd.read_csv(os.path.join('./data/',data_name[idx]), index_col=0)
     dataset = data.values
@@ -40,5 +50,7 @@ model.summary()
 
 model.compile(optimizer="adam", metrics=['accuracy'], loss="sparse_categorical_crossentropy")
 
-model.fit(X_train, y_train, epochs=50, batch_size=32, validation_data=(X_test, y_test))
-model.save('./models/model_multi_mark.h5')
+model.fit(X_train, y_train, epochs=1, batch_size=32, validation_data=(X_test, y_test))
+
+
+save_model(model)
