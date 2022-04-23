@@ -1,144 +1,107 @@
 import cv2
-import time
-import threading
 import numpy as np
 import mediapipe as mp
 import tensorflow.keras
 
 from collections import deque
 
-cap = cv2.VideoCapture(0)
+import utils
+import config
 
-mpPose = mp.solutions.pose
-pose = mpPose.Pose()
-mpDraw = mp.solutions.drawing_utils
-
-lmk_list = []
-num_of_frames = 600
-
-i = 0
-warmup_frame = 60
-
-lowerColor = (7, 130, 200)
-upperColor = (20, 200, 255)
-
-pts = deque(maxlen=64)
-
-model = tensorflow.keras.models.load_model("./models/model_multi_mark.h5")
-
-def draw_landmark_on_image(mpDraw, results, img):
-    mpDraw.draw_landmarks(img, results.pose_landmarks, mpPose.POSE_CONNECTIONS)
-
-    for id, lmk in enumerate(results.pose_landmarks.landmark):
-        h, w, c = img.shape
-        cx, cy = int(lmk.x * w), int(lmk.y * h)
-        cv2.circle(img, (cx, cy), 10, (0, 0, 255), cv2.FILLED)
-    return img
-
-
-def make_landmark_timestep(results):
-    c_lmk = []
-    for id, lmk in enumerate(results.pose_landmarks.landmark):
-        c_lmk.append(lmk.x)
-        c_lmk.append(lmk.y)
-        c_lmk.append(lmk.z)
-        c_lmk.append(lmk.visibility)
-    return c_lmk
-
-def draw_class_on_image(label, img):
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    bottomLeftCornerOfText = (10, 30)
-    fontScale = 1
-    fontColor = (0, 255, 0)
-    thickness = 2
-    lineType = 2
-    cv2.putText(img, label,
-                bottomLeftCornerOfText,
-                font,
-                fontScale,
-                fontColor,
-                thickness,
-                lineType)
-    return img
 
 def detect(model, lmk_list):
-    global label
     lmk_list = np.array(lmk_list)
     lmk_list = np.expand_dims(lmk_list, axis=0)
     print(lmk_list.shape)
     results = model.predict(lmk_list)
     print(results.shape)
     lb_idx = np.argmax(results, axis=1)
-    if lb_idx == 0:
-        label = 'STOP'
-    elif lb_idx == 1:
-        label = 'l_hand_swing'
-    elif lb_idx == 2:
-        label = 'r_HAND'
-    elif lb_idx == 3:
-        label = '###_l_leg_swing'
-    elif lb_idx == 4:
-        label = '###R_LEG'
-    return label
+    return lb_idx
 
-label = "Warmup...."
-while len(lmk_list) <= num_of_frames:
-    ret, frame = cap.read()
-    if ret:
-        
-        blurred = cv2.GaussianBlur(frame, (0, 0), 1)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-        
-        mask = cv2.inRange(hsv, lowerColor, upperColor)
-        mask = cv2.erode(mask, None, iterations=2)
-        mask = cv2.dilate(mask, None, iterations=2)
-        
-        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE)
-        cnts = cnts[0]
+def main():
+    model = tensorflow.keras.models.load_model(config.model_path)
+    fgbg = cv2.createBackgroundSubtractorMOG2()
+    
+    idx = 0
+    lmk_list = []
+    pts = deque(maxlen=64)
+    
+    cap = cv2.VideoCapture('./data/축구2-1.mp4')
 
-        center = None
-        
-        if len(cnts) > 0:
+    width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-            c = max(cnts, key=cv2.contourArea)
-            ((x, y), radius) = cv2.minEnclosingCircle(c)
-            M = cv2.moments(c)
-            center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-            if radius > 10:
-                cv2.circle(frame, (int(x), int(y)), int(radius),
-                    (0, 255, 255), 2)
-                cv2.circle(frame, center, 5, (0, 0, 255), -1)
-        
-        pts.appendleft(center)
-        
-        for i in range(1, len(pts)):
-            if pts[i - 1] is None or pts[i] is None:
-                continue
-
-            thickness = int(np.sqrt(64 / float(i + 1)) * 2.5)
-            cv2.line(frame, pts[i - 1], pts[i], (0, 0, 255), thickness)
-        
-
-        frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = pose.process(frameRGB)
-        i = i + 1
-        if i > warmup_frame:
-            print("Start Detect...")
-            if results.pose_landmarks:
-
-                lmk = make_landmark_timestep(results)
-                lmk_list.append(lmk)
-                if len(lmk_list) == 10:
-                    t1 = threading.Thread(target=detect, args=(model, lmk_list,))
-                    t1.start()
-                    lmk_list = []
-                frame = draw_landmark_on_image(mpDraw, results, frame)
-        frame = draw_class_on_image(label, frame)
-        cv2.imshow('image', frame)
-        if cv2.waitKey(1) == ord("q"):
+    mpPose = mp.solutions.pose
+    pose = mpPose.Pose()
+    mpDraw = mp.solutions.drawing_utils
+    
+    label = "Warmup...."
+    while True:
+        ret, frame = cap.read()
+        print(frame.shape)
+        if frame is None:
             break
+        if ret:
+            fgmask = fgbg.apply(frame)
+            fgmask = cv2.erode(fgmask, None, iterations=3)
+            fgmask = cv2.dilate(fgmask, None, iterations=3)
+            fgmask = cv2.threshold(fgmask, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-cap.release()
-cv2.destroyAllWindows()
-cv2.waitKey(1)
+            frame2 = frame.copy()
+            frame2[fgmask!=255] = (0,0,0)
+            
+            blurred = cv2.GaussianBlur(frame2, (0, 0), 1)
+            hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+            
+            mask = cv2.inRange(hsv, config.lowerColor, config.upperColor)
+            mask = cv2.erode(mask, None, iterations=2)
+            mask = cv2.dilate(mask, None, iterations=5)
+            
+            cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE)[0]
+
+            center = None
+            if len(cnts) > 0:
+                center, x, y, radius = utils.find_center(cnts)
+                if radius > 10:
+                    cv2.circle(frame, (int(x), int(y)), int(radius),
+                        (0, 255, 255), 2)
+                    cv2.circle(frame, center, 5, (0, 0, 255), -1)
+            pts.appendleft(center)
+            
+            frame = utils.draw_line(pts, frame)
+
+            frameRGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = pose.process(frameRGB)
+            idx = idx + 1
+            if idx > config.warmup_frame:
+                print("Start Detect...")
+                
+                if results.pose_landmarks:
+                    lmk = utils.make_landmark_timestep(results)
+                    if center is None:
+                        lmk = lmk + [0, 0, 0]
+                    else:
+                        lmk = lmk + [center[0]/width, center[1]/height, 1]
+                    lmk_list.append(lmk)
+                    frame = utils.draw_landmark_on_image(mpDraw, results, frame)
+
+                    if len(lmk_list) == config.num_of_timestep:
+                        label = config.labels[int(detect(model, lmk_list))]
+                        lmk_list = []
+
+            frame = utils.draw_class_on_image('['+str(idx)+']'+label, frame)
+            cv2.imshow('image', frame)
+            cv2.imshow('frame2', frame2)
+            cv2.imshow('fgmask', fgmask)
+            cv2.imshow('mask', mask)
+            if cv2.waitKey(1) == ord("q"):
+                break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    cv2.waitKey(1)
+    
+
+if __name__ == '__main__':
+    main()
