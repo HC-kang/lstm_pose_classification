@@ -11,7 +11,7 @@ from collections import deque
 import utils
 import config
 
-VIDEO_FILE = 'yellow_ball2.mov'
+VIDEO_FILE = '0516/red/data/red_shoot_005.mov'
 
 BASE_DIR = Path(__file__).resolve().parent
 VIDEO_PATH = os.path.join(BASE_DIR, 'data', VIDEO_FILE)
@@ -61,18 +61,18 @@ def detect(model, lmk_list):
     return lb_idx
 
 
-def getContour(img, imgContour, area_min):
-    contours, heirarchy = cv2.findContours(
-        img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
+# def getContour(img, imgContour, area_min):
+#     contours, heirarchy = cv2.findContours(
+#         img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
 
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area > area_min:
-            cv2.drawContours(imgContour, cnt, -1, (255, 0, 255), 7)
-            peri = cv2.arcLength(cnt, True)
-            approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-            x_, y_, w, h = cv2.boundingRect(approx)
-            cv2.rectangle(imgContour, (x_, y_), (x_+w, y_+h), (0, 255, 0), 5)
+#     for cnt in contours:
+#         area = cv2.contourArea(cnt)
+#         if area > area_min:
+#             cv2.drawContours(imgContour, cnt, -1, (255, 0, 255), 7)
+#             peri = cv2.arcLength(cnt, True)
+#             approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+#             x_, y_, w, h = cv2.boundingRect(approx)
+#             cv2.rectangle(imgContour, (x_, y_), (x_+w, y_+h), (0, 255, 0), 5)
 
 
 def main():
@@ -88,10 +88,9 @@ def main():
     radius = 0
     before_center = None
     expected_center = None
-    n_try = 0
 
-    cap = cv2.VideoCapture('http://172.30.1.47:8080/video')
-    # cap = cv2.VideoCapture(VIDEO_PATH)
+    # cap = cv2.VideoCapture('http://172.30.1.47:8080/video')
+    cap = cv2.VideoCapture(VIDEO_PATH)
     # cap = cv2.VideoCapture(0)
     # 불량a
     # 1, 2: 슛, 3: 화각 좁음
@@ -109,6 +108,10 @@ def main():
         ret, frame = cap.read()
         if frame is None:
             break
+        if frame.shape[0] > frame.shape[1]:
+            q = frame.shape[0]//4
+            frame = frame[q:-q]
+        frame = cv2.flip(frame, 1)
         start = time.time()
         if ret:
             # H_MAX = cv2.getTrackbarPos('H_MAX', 'HSV_settings')
@@ -131,22 +134,10 @@ def main():
             bg_mask = cv2.threshold(
                 bg_mask, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-            # 하늘 제거용 마스크 생성
-            sky_mask = cv2.inRange(hsv_frame, (105, 0, 195), (120, 40, 255))
-            sky_mask = cv2.dilate(sky_mask, None, iterations=1)
-            sky_mask = cv2.bitwise_not(sky_mask)
-
-            # 땅 제거용 마스크 생성
-            land_mask = cv2.inRange(hsv_frame, (10, 0, 150), (30, 80, 255))
-            land_mask = cv2.dilate(land_mask, None, iterations=1)
-            land_mask = cv2.bitwise_not(land_mask)
-
             # 배경, 하늘 제거 프레임 생성
             frame_bg_rm = frame.copy()
             frame_bg_rm[bg_mask != 255] = (0, 0, 0)
             hsv_frame_find = cv2.cvtColor(frame_bg_rm, cv2.COLOR_BGR2HSV)
-            # hsv_frame_find = cv2.bitwise_and(hsv_frame_find, hsv_frame_find, mask=sky_mask)
-            # hsv_frame_find = cv2.bitwise_and(hsv_frame_find, hsv_frame_find, mask=land_mask)
 
             color_mask_find = cv2.inRange(hsv_frame_find, lower, higher)
             color_mask_find = cv2.erode(color_mask_find, None, iterations=1)
@@ -154,12 +145,10 @@ def main():
 
             color_mask_see = cv2.inRange(hsv_frame, lower, higher)
             hsv_picker = cv2.bitwise_and(frame, frame, mask=color_mask_see)
-            # hsv_picker = cv2.bitwise_and(hsv_picker, hsv_picker, mask=sky_mask)
-            # hsv_picker = cv2.bitwise_and(hsv_picker, hsv_picker, mask=land_mask)
 
             threshold1 = 200
             threshold2 = 220
-            area_min = 5000
+            # area_min = 5000
             # threshold1 = cv2.getTrackbarPos('threshold1', 'edge_settings')
             # threshold2 = cv2.getTrackbarPos('threshold2', 'edge_settings')
             # area_min = cv2.getTrackbarPos('area_min', 'edge_settings')
@@ -167,9 +156,9 @@ def main():
             edge_frame[bg_mask != 255] = (0, 0, 0)
             edge_frame = cv2.Canny(edge_frame, threshold1, threshold2)
             # edge_frame = cv2.erode(edge_frame, None, iterations=1)
-            dilated_edge_frame = cv2.dilate(edge_frame, None, iterations=1)
+            # dilated_edge_frame = cv2.dilate(edge_frame, None, iterations=1)
 
-            getContour(dilated_edge_frame, frame, area_min)
+            # getContour(dilated_edge_frame, frame, area_min)
 
             cnts = cv2.findContours(
                 color_mask_find, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
@@ -178,9 +167,7 @@ def main():
             cnts = sorted(cnts, key=lambda x: len(x), reverse=True)
 
             center = None
-
             if len(cnts) > 0:  # 컨투어 잡힐때(=공이 있을 때)
-                n_try = 0
                 center, _, _, radius = utils.find_center(cnts)
 
                 before_center = before_center if before_center is not None else center
@@ -266,35 +253,29 @@ def main():
             winname4 = "hsv_picker"
             cv2.namedWindow(winname4)
             cv2.moveWindow(winname4, 640, 370)
-            winname5 = "sky_mask"
-            cv2.namedWindow(winname5)
-            cv2.moveWindow(winname5, 0, 740)
-            winname6 = "land_mask"
-            cv2.namedWindow(winname6)
-            cv2.moveWindow(winname6, 640, 740)
 
-            frame = cv2.resize(frame, dsize=(640, 360),
-                               interpolation=cv2.INTER_AREA)
             cv2.imshow(winname1, frame)
-            color_mask_find = cv2.resize(color_mask_find, dsize=(
-                640, 360), interpolation=cv2.INTER_AREA)
+
             cv2.imshow(winname2, color_mask_find)
-            frame_bg_rm = cv2.resize(frame_bg_rm, dsize=(
-                640, 360), interpolation=cv2.INTER_AREA)
+
             cv2.imshow(winname3, frame_bg_rm)
-            hsv_picker = cv2.resize(hsv_picker, dsize=(
-                640, 360), interpolation=cv2.INTER_AREA)
+
             cv2.imshow(winname4, hsv_picker)
-            sky_mask = cv2.resize(sky_mask, dsize=(
-                640, 360), interpolation=cv2.INTER_AREA)
-            cv2.imshow(winname5, sky_mask)
-            land_mask = cv2.resize(land_mask, dsize=(
-                640, 360), interpolation=cv2.INTER_AREA)
-            cv2.imshow(winname6, land_mask)
-            # edge_frame = cv2.resize(edge_frame, dsize=(640, 360), interpolation=cv2.INTER_AREA)
-            # cv2.imshow(winname5, edge_frame)
-            # dilated_edge_frame = cv2.resize(dilated_edge_frame, dsize=(640, 360), interpolation=cv2.INTER_AREA)
-            # cv2.imshow(winname6, dilated_edge_frame)
+
+            # frame = cv2.resize(frame, dsize=(640, 360),
+            #                    interpolation=cv2.INTER_AREA)
+            # cv2.imshow(winname1, frame)
+            # color_mask_find = cv2.resize(color_mask_find, dsize=(
+            #     640, 360), interpolation=cv2.INTER_AREA)
+            # cv2.imshow(winname2, color_mask_find)
+            # frame_bg_rm = cv2.resize(frame_bg_rm, dsize=(
+            #     640, 360), interpolation=cv2.INTER_AREA)
+            # cv2.imshow(winname3, frame_bg_rm)
+            # hsv_picker = cv2.resize(hsv_picker, dsize=(
+            #     640, 360), interpolation=cv2.INTER_AREA)
+            # cv2.imshow(winname4, hsv_picker)
+            # sky_mask = cv2.resize(sky_mask, dsize=(
+            #     640, 360), interpolation=cv2.INTER_AREA)
 
             if cv2.waitKey(1) == ord("q"):
                 break
@@ -305,6 +286,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # hsv_setting_bar()
-    # edge_setting_bar()
+    hsv_setting_bar()
+    edge_setting_bar()
     main()
