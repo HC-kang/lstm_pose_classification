@@ -7,20 +7,23 @@ Mediapipe BlazePose와 LSTM을 이용한 Pose Classification을 진행하며, Op
 
 # 로컬 개발 환경 설정
 
-anaconda 설치(인터넷 다운로드)
+$ ~/pose/python/ 에서
 
 ```
-conda create -n pose python=3.7
-conda prompt
+python3 -m venv venv
 
-cd pose/test_model_LSTM
+source venv/bin/activate
 
-pip install opencv-python
-pip install mediapipe
-pip install tensorflow
-
+pip install -r requirements.txt
+```
+```
+python data_producer.py
+python lstm_model.py
 python lstm_pose_classifier.py
 ```
+
+종료시 ```deactivate```
+
 
 # Mediapipe Blazepose Keypoints
 
